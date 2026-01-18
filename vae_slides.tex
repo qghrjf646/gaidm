@@ -1,0 +1,287 @@
+\documentclass[aspectratio=169,11pt]{beamer}
+
+% Theme and colors
+\usetheme{Madrid}
+\usecolortheme{default}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}[frame number]
+
+% Packages
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+
+% Custom commands
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\KL}{\mathrm{KL}}
+\newcommand{\ELBO}{\mathcal{L}}
+\newcommand{\Normal}{\mathcal{N}}
+
+% Title information
+\title[VAE on MNIST]{Variational Autoencoders on MNIST}
+\subtitle{ELBO Derivation, KL Annealing, and CVAE Extension}
+\author{Alexis Le Trung, Khatir Youyou, Tidjani Adam Kandine, \\ Yahya Ahachim, Aniss Outaleb, Quentin Wurtlin}
+\institute{Generative AI and Diffusion Models}
+\date{\today}
+
+\begin{document}
+
+%==============================================================================
+% Slide 1: Title
+%==============================================================================
+\begin{frame}
+    \titlepage
+\end{frame}
+
+%==============================================================================
+% Slide 2: Objectives
+%==============================================================================
+\begin{frame}{Project Objectives}
+    \begin{enumerate}
+        \item \textbf{Derive the ELBO} from first principles with closed-form KL for Gaussians
+        \vspace{0.4cm}
+        \item \textbf{Implement a Convolutional VAE} on MNIST with 2D latent space
+        \vspace{0.4cm}
+        \item \textbf{Track reconstruction vs KL} separately, implement KL annealing
+        \vspace{0.4cm}
+        \item \textbf{Visualize}: latent space, latent traversals, interpolations
+        \vspace{0.4cm}
+        \item \textbf{Extend to CVAE} for controlled digit generation
+    \end{enumerate}
+\end{frame}
+
+%==============================================================================
+% Slide 3: ELBO Derivation
+%==============================================================================
+\begin{frame}{ELBO Derivation}
+    Starting from intractable marginal likelihood, we derived:
+    \begin{block}{Evidence Lower Bound}
+        \begin{equation*}
+            \log p(x) \geq \ELBO = \underbrace{\E_{q_\phi(z|x)}[\log p_\theta(x|z)]}_{\text{Reconstruction (BCE)}} - \underbrace{\KL(q_\phi(z|x) \| p(z))}_{\text{Regularization}}
+        \end{equation*}
+    \end{block}
+    
+    \vspace{0.3cm}
+    \textbf{Closed-form KL} for Gaussian encoder $q = \Normal(\mu, \sigma^2)$ and prior $p = \Normal(0, I)$:
+    \begin{equation*}
+        \KL(q \| p) = \frac{1}{2} \sum_{j=1}^{d} \left(\mu_j^2 + \sigma_j^2 - \log \sigma_j^2 - 1\right)
+    \end{equation*}
+    
+    \textbf{Gradients:} $\frac{\partial \KL}{\partial \mu_j} = \mu_j$, \quad $\frac{\partial \KL}{\partial \sigma_j} = \sigma_j - \frac{1}{\sigma_j}$
+\end{frame}
+
+%==============================================================================
+% Slide 4: Architecture & Training
+%==============================================================================
+\begin{frame}{Architecture \& Training Setup}
+    \begin{columns}
+        \begin{column}{0.5\textwidth}
+            \textbf{Convolutional VAE:}
+            \begin{itemize}
+                \item Encoder: Conv layers $\to$ 2D latent $(\mu, \log\sigma^2)$
+                \item Decoder: Linear $\to$ ConvTranspose layers
+                \item Reparameterization: $z = \mu + \sigma \odot \epsilon$
+            \end{itemize}
+            
+            \vspace{0.3cm}
+            \textbf{KL Annealing:}
+            \begin{equation*}
+                \beta(t) = \min\left(1, \frac{t}{10}\right)
+            \end{equation*}
+            Prevents posterior collapse
+        \end{column}
+        \begin{column}{0.5\textwidth}
+            \begin{table}
+                \small
+                \centering
+                \begin{tabular}{lc}
+                    \toprule
+                    \textbf{Parameter} & \textbf{Value} \\
+                    \midrule
+                    Latent dim & 2 \\
+                    Batch size & 128 \\
+                    Learning rate & $10^{-3}$ \\
+                    Optimizer & Adam \\
+                    Epochs & 30 \\
+                    KL warmup & 10 epochs \\
+                    \bottomrule
+                \end{tabular}
+            \end{table}
+        \end{column}
+    \end{columns}
+\end{frame}
+
+%==============================================================================
+% Slide 5: VAE Training Curves (Figure)
+%==============================================================================
+\begin{frame}{VAE Training Curves}
+    \centering
+    % Fit the training-curve figure within slide by limiting height and allowing full width
+    \includegraphics[width=\textwidth,height=0.82\textheight,keepaspectratio]{vae_train_curves.png}
+
+    \vspace{0.3cm}
+    {\small \textbf{Key observations:} KL annealing warmup visible in epochs 1-10; balanced Recon/KL ratio $\approx 20$; no posterior collapse.}
+\end{frame}
+
+%==============================================================================
+% Slide 6: Latent Space Visualization (Figure)
+%==============================================================================
+\begin{frame}{Latent Space Visualization}
+    \begin{columns}
+        \begin{column}{0.55\textwidth}
+            \begin{center}
+                \includegraphics[width=\textwidth]{vae_latent_space_visualization.png}
+            \end{center}
+        \end{column}
+        \begin{column}{0.45\textwidth}
+            \textbf{Observations:}
+            \begin{itemize}
+                \item Clear clustering by digit class
+                \item Similar digits nearby (4/9, 3/8, 1/7)
+                \item Smooth, continuous manifold
+                \item Matches $\Normal(0, I)$ prior
+            \end{itemize}
+            
+            \vspace{0.3cm}
+            \textbf{Key insight:}\\
+            Organization emerges from reconstruction alone --- no labels used!
+        \end{column}
+    \end{columns}
+\end{frame}
+
+%==============================================================================
+% Slide 7: Latent Traversal Grid (Figure)
+%==============================================================================
+\begin{frame}{Latent Traversal Grid}
+    \centering
+    % Traversal grid tends to be tall; constrain by height so it fits without clipping
+    \includegraphics[width=0.95\textwidth,height=0.82\textheight,keepaspectratio]{vae_latent_traversal_grid.png}
+
+    \vspace{0.3cm}
+    {\small \textbf{Traversing $z_1$ vs $z_2$:} $z_1$ (horizontal) controls slant/rotation; $z_2$ (vertical) controls thickness/scale.}
+\end{frame}
+
+%==============================================================================
+% Slide 8: Latent Interpolations (Figure)
+%==============================================================================
+\begin{frame}{Latent Interpolations}
+    \centering
+    % Make interpolations large but cap height to avoid overflow vertically
+    \includegraphics[width=0.98\textwidth,height=0.78\textheight,keepaspectratio]{vae_latent_interpolations.png}
+
+    \vspace{0.2cm}
+    {\small Linear interpolation between encoded digit pairs. Smooth transitions validate the continuous, well-structured latent space.}
+\end{frame}
+
+%==============================================================================
+% Slide 9: CVAE Extension
+%==============================================================================
+\begin{frame}{CVAE Extension: Conditional Generation}
+    \textbf{Modification:} Condition encoder and decoder on class label $c$
+    \begin{equation*}
+        \ELBO_{\text{CVAE}} = \E_{q_\phi(z|x,c)}[\log p_\theta(x|z,c)] - \KL(q_\phi(z|x,c) \| p(z))
+    \end{equation*}
+    
+    \vspace{0.3cm}
+    \textbf{Implementation:}
+    \begin{itemize}
+        \item One-hot encode label $\to$ broadcast to $10 \times 28 \times 28$
+        \item Concatenate with image as extra channels
+        \item Class-independent prior: $p(z) = \Normal(0, I)$
+    \end{itemize}
+    
+    \vspace{0.3cm}
+    \textbf{Result:} Latent space encodes \textit{style}, label provides \textit{class identity}
+\end{frame}
+
+%==============================================================================
+% Slide 10: VAE vs CVAE Comparison
+%==============================================================================
+\begin{frame}{VAE vs CVAE: Quantitative Comparison}
+    \begin{table}
+        \centering
+        \large
+        \begin{tabular}{lccc}
+            \toprule
+            \textbf{Model} & \textbf{Recon. Loss} & \textbf{KL} & \textbf{Total Loss} \\
+            \midrule
+            VAE & 138.00 & 6.59 & 144.59 \\
+            CVAE & 124.36 & 4.80 & 129.16 \\
+            \midrule
+            \textbf{Improvement} & \textbf{9.9\%} & \textbf{27.2\%} & \textbf{10.7\%} \\
+            \bottomrule
+        \end{tabular}
+    \end{table}
+    
+    \vspace{0.5cm}
+    \textbf{Why CVAE performs better:}
+    \begin{itemize}
+        \item Decoder doesn't need to infer class from $z$ $\Rightarrow$ simpler task
+        \item Latent space focuses purely on style variations
+        \item More compact representation (lower KL)
+    \end{itemize}
+\end{frame}
+
+%==============================================================================
+% Slide 11: CVAE Disentanglement (Figure)
+%==============================================================================
+\begin{frame}{CVAE: Disentanglement Demonstration}
+    \begin{center}
+        \includegraphics[width=0.85\textwidth]{cvae_disentangling.png}
+    \end{center}
+    \vspace{-0.2cm}
+    \small
+    \textbf{Row 1-2:} Same $z$ interpolation with different class labels (1 vs 7).
+    \textbf{Row 3:} Fixed $z$, varying class 0-9 $\Rightarrow$ style transfer across all digits.
+\end{frame}
+
+%==============================================================================
+% Slide 12: Key Findings
+%==============================================================================
+\begin{frame}{Key Findings}
+    \begin{enumerate}
+        \item \textbf{ELBO provides principled training objective}
+              \begin{itemize}
+                  \item Reconstruction + regularization trade-off
+                  \item Closed-form KL enables efficient optimization
+              \end{itemize}
+        
+        \vspace{0.2cm}
+        \item \textbf{KL annealing is essential}
+              \begin{itemize}
+                  \item Without it: posterior collapse, KL $\to 0$
+                  \item 10-epoch warmup gave balanced training
+              \end{itemize}
+        
+        \vspace{0.2cm}
+        \item \textbf{VAE learns meaningful structure unsupervised}
+              \begin{itemize}
+                  \item Class clustering, smooth interpolations
+              \end{itemize}
+        
+        \vspace{0.2cm}
+        \item \textbf{CVAE achieves explicit disentanglement}
+              \begin{itemize}
+                  \item 9.9\% better reconstruction, controlled generation
+              \end{itemize}
+    \end{enumerate}
+\end{frame}
+
+%==============================================================================
+% Slide 13: Thank You
+%==============================================================================
+\begin{frame}
+    \begin{center}
+        {\Huge Thank You!}
+        
+        \vspace{1cm}
+        {\Large Questions?}
+        
+        \vspace{1cm}
+        \small
+        Code available in accompanying Jupyter notebook
+    \end{center}
+\end{frame}
+
+\end{document}
