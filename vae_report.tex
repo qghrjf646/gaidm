@@ -340,12 +340,6 @@ Figure~\ref{fig:vae_training} shows the training curves for the standard VAE. Ke
     \item \textbf{Recon/KL ratio} of ~20 indicates balanced training without posterior collapse.
 \end{itemize}
 
-\begin{figure}[h]
-    \centering
-    \includegraphics[width=0.9\textwidth]{vae_train_curves.png}
-    \caption{VAE training curves showing reconstruction loss (left), KL divergence (center), and their ratio (right) over 30 epochs. The KL annealing warmup (epochs 1-10) is visible in the KL curve.}
-    \label{fig:vae_training}
-\end{figure}
 
 \subsubsection{Reconstruction Quality}
 
@@ -355,12 +349,6 @@ Visual inspection of reconstructions shows that the VAE captures the essential s
 
 With a 2D latent space, we can directly visualize the learned representation (Figure~\ref{fig:latent_space}). The latent space shows clear clustering by digit class, with semantically similar digits (e.g., 4 and 9, 3 and 8) positioned nearby. This organization emerges purely from the reconstruction objective without any label supervision.
 
-\begin{figure}[h]
-    \centering
-    \includegraphics[width=0.7\textwidth]{vae_latent_space_visualization.png}
-    \caption{Visualization of the 2D latent space for 5000 MNIST test samples, colored by digit class. Note the natural clustering by class without any label supervision.}
-    \label{fig:latent_space}
-\end{figure}
 
 \subsubsection{Latent Traversals}
 
@@ -370,23 +358,11 @@ By fixing one latent dimension and varying the other across $[-3, 3]$, we observ
     \item $z_2$ (vertical) influences stroke thickness and overall scale
 \end{itemize}
 
-\begin{figure}[h]
-    \centering
-    \includegraphics[width=0.65\textwidth]{vae_latent_traversal_grid.png}
-    \caption{Latent space traversal grid. Each row corresponds to a fixed $z_2$ value, each column to a fixed $z_1$ value, ranging from -3 to +3.}
-    \label{fig:traversal}
-\end{figure}
 
 \subsubsection{Latent Interpolations}
 
 Linear interpolation between encoded digits produces semantically meaningful transitions (Figure~\ref{fig:interpolation}). For example, interpolating from a ``3'' to an ``8'' shows intermediate forms that resemble plausible hybrid digits.
 
-\begin{figure}[h]
-    \centering
-    \includegraphics[width=0.9\textwidth]{vae_latent_interpolations.png}
-    \caption{Linear interpolations in latent space between pairs of encoded digits. Each row shows 10 steps from the source digit (left) to the target digit (right).}
-    \label{fig:interpolation}
-\end{figure}
 
 \subsection{CVAE Training Results}
 
@@ -403,11 +379,12 @@ The improvement is expected: by providing class labels, the decoder doesn't need
 
 \subsubsection{Conditional Generation}
 
-The CVAE enables controlled generation: given any latent vector $z$ and class label $c$, we can generate a digit of class $c$ with style determined by $z$. Figure~\ref{fig:cvae_conditional} shows 10 samples for each digit class, demonstrating consistent class identity with natural style variation.
+The CVAE enables controlled generation: given any latent vector $z$ and class label $c$, we can generate a digit of class $c$ with style determined by $z$. Figure~\ref{fig:cvae_generation} shows 10 samples for each digit class, demonstrating consistent class identity with natural style variation.
 
 \subsubsection{Latent Space Structure}
 
-Unlike the VAE's clustered latent space, the CVAE's latent space shows \textbf{mixed class distributions}. This is the desired behavior with a class-independent prior: the latent space encodes class-agnostic features (style, stroke characteristics) while class information is provided separately.
+Unlike the VAE's clustered latent space, the CVAE's latent space shows \textbf{mixed class distributions}(Figure~\ref{fig:cve_latent_space}). This is the desired behavior with a class-independent prior: the latent space encodes class-agnostic features (style, stroke characteristics) while class information is provided separately.
+
 
 \subsubsection{Disentanglement Demonstration}
 
@@ -421,12 +398,6 @@ A key advantage of CVAEs is explicit disentanglement of class identity from othe
     \item \textbf{Class-conditional traversals}: Latent traversals for a fixed class show morphological variations (slant, thickness) while maintaining class identity perfectly.
 \end{enumerate}
 
-\begin{figure}[h]
-    \centering
-    \includegraphics[width=0.9\textwidth]{cvae_disentangling.png}
-    \caption{CVAE disentanglement demonstration. Top rows: same latent interpolation with different class labels (1 vs 7). Bottom row: fixed latent vector $z$ applied to all digit classes 0-9, showing style transfer.}
-    \label{fig:cvae_disentangle}
-\end{figure}
 
 \subsection{Quantitative Comparison}
 
@@ -519,8 +490,10 @@ Several extensions could improve upon this work:
 \section*{Acknowledgments}
 %==============================================================================
 
-This work was completed as part of the Generative AI and Diffusion Models course. We thank the course instructors for guidance and the PyTorch team for their excellent deep learning framework.
+This work was completed as part of the Generative AI and Diffusion Models course. We thank the course instructor Dr Eric Moulines for his classes and the PyTorch team for their excellent deep learning framework.
 
+%==============================================================================
+\appendix
 %==============================================================================
 \bibliographystyle{plainnat}
 \begin{thebibliography}{10}
@@ -567,44 +540,60 @@ Aaron van~den Oord, Oriol Vinyals, and Koray Kavukcuoglu.
 
 \end{thebibliography}
 
-%==============================================================================
-\appendix
-\section{Implementation Details}
-%==============================================================================
+\section{Collected Figures}
+\label{sec:figures}
 
-\subsection{PyTorch Code: VAE Loss Function}
+The following figures are collected here for convenience. Refer to the main text for discussion and figure references.
 
-\begin{lstlisting}[language=Python, basicstyle=\small\ttfamily]
-def vae_loss(x, x_recon, mu, log_var, kl_weight=1.0):
-    """
-    Compute VAE loss = Reconstruction + KL Divergence
-    """
-    # Reconstruction loss: Binary Cross-Entropy
-    # Using reduction='none' to sum over pixels, then mean over batch
-    recon_loss = F.binary_cross_entropy(x_recon, x, reduction='sum') / x.size(0)
-    
-    # KL Divergence: -0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
-    # Sum over latent dimensions, mean over batch
-    kl_loss = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp(), dim=1).mean()
-    
-    # Total loss with KL weight
-    total_loss = recon_loss + kl_weight * kl_loss
-    
-    return total_loss, recon_loss, kl_loss
-\end{lstlisting}
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.9\textwidth]{vae_train_curves.png}
+    \caption{VAE training curves showing reconstruction loss (left), KL divergence (center), and their ratio (right) over 30 epochs. The KL annealing warmup (epochs 1-10) is visible in the KL curve.}
+    \label{fig:vae_training}
+\end{figure}
 
-\subsection{Reparameterization Implementation}
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.7\textwidth]{vae_latent_space_visualization.png}
+    \caption{Visualization of the 2D latent space for 5000 MNIST test samples, colored by digit class. Note the natural clustering by class without any label supervision.}
+    \label{fig:latent_space}
+\end{figure}
 
-\begin{lstlisting}[language=Python, basicstyle=\small\ttfamily]
-def reparameterize(self, mu, log_var):
-    """
-    Reparameterization trick: z = mu + sigma * epsilon
-    where epsilon ~ N(0, I)
-    """
-    std = torch.exp(0.5 * log_var)  # sigma = exp(0.5 * log(sigma^2))
-    epsilon = torch.randn_like(std)  # Sample from N(0, I)
-    z = mu + std * epsilon
-    return z
-\end{lstlisting}
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.65\textwidth]{vae_latent_traversal_grid.png}
+    \caption{Latent space traversal grid. Each row corresponds to a fixed $z_2$ value, each column to a fixed $z_1$ value, ranging from -3 to +3.}
+    \label{fig:traversal}
+\end{figure}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.9\textwidth]{vae_latent_interpolations.png}
+    \caption{Linear interpolations in latent space between pairs of encoded digits. Each row shows 10 steps from the source digit (left) to the target digit (right).}
+    \label{fig:interpolation}
+\end{figure}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.7\textwidth]{cvae_latent_space_visualization.png}
+    \caption{Visualization of the 2D latent space for 5000 MNIST test samples, colored by digit class. Note the unclear clustering given the label supervision.}
+    \label{fig:cve_latent_space}
+\end{figure}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.9\textwidth]{cvae_disentangling.png}
+    \caption{CVAE disentanglement demonstration. Top rows: same latent interpolation with different class labels (1 vs 7). Bottom row: fixed latent vector $z$ applied to all digit classes 0-9, showing style transfer.}
+    \label{fig:cvae_disentangle}
+\end{figure}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.9\textwidth]{cvae_conditional_generation.png}
+    \caption{CVAE conditional generation: 10 samples for each digit.}
+    \label{fig:cvae_generation}
+\end{figure}
+
+
 
 \end{document}
